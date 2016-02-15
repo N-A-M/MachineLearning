@@ -1,0 +1,125 @@
+---
+title: "Activity Performance Evaluation Using Machine Learning Algorithms"
+author: "Neveen Mohamed"
+date: "Sunday, February 14, 2016"
+output: 
+    html_document:
+        pandoc_args: [
+        "+RTS", "-K3g",
+        "-RTS"
+        ]
+---
+# Introduction
+
+In this report data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants are used to evaluate the performance of these activities.   
+Data used in this project comes from  http://groupware.les.inf.puc-rio.br/har 
+
+# Getting and cleaning the data
+The initial step is to load the training data then display the dimensions as well as the number of NA values as follows:
+
+```{r}
+library("Hmisc")
+dtrain <- csv.get("pml-training.csv")
+dm <- dim(dtrain)
+nas <- sum(is.na(dtrain))
+```
+
+The data has `r dm` observations by variables and a total of `r nas` NAs. noting the big number of NAs, we need to know how these NAs are allocated in the data set as follows:
+
+```{r}
+nas.vars <- sapply (dtrain,function(x) sum(is.na(x)) )
+fulldtrain <- dtrain[complete.cases(dtrain),]
+d <-dim(fulldtrain)
+```
+ 
+the number of NAs for each of the 160 variables are:   
+`r nas.vars`  
+This result denotes lack of values are concentrated for some of the variables. If all NAs in the data set are ommitted so we use all the variables the dimension of the data set will be:   
+`r d`  
+The next step is to evaluate the output variable classe givin in the data set. 
+```{r}
+cls <- class(fulldtrain$classe)
+lbls <- levels(fulldtrain$classe)
+```
+
+The type of the output variable is `r cls` with values as `r lbls`
+
+## Training data set and variable selection
+
+In order to decide on wether we should use the full data set with all variables or we should omit some of the variables we need to evaluate the test data set for variables presence.  
+In this step we start by looking at the givin test data as follows:
+
+```{r}
+dtest <- csv.get("pml-testing.csv")
+tdm <- dim(dtest)
+tnas <- sum(is.na(dtest))
+tnas.vars <- sapply (dtest,function(x) sum(is.na(x)) )
+fulldtest <- dtest[complete.cases(dtest),]
+td <-dim(fulldtest)
+```
+The dimension of the training data set is `r tdm` and the total number of NAs are `r tnas` the dimension of the full test data is `r td`  
+None of the givin 20 case test data are complete, implying we need to omit some of the variables for proper classification.  
+We need then to know which variables are givin in the test data and which are omitted.  
+`r tnas.vars` 
+from the above results for the test data set we either have 0 NAs or all NAs for these variables.  
+The classifier algorithm then will need to use variables present in the test set and are not NAs.  
+These can be marked by index as follows:
+```{r}
+idxs <- which(tnas.vars == 0)
+```
+From this we mark the variable indexes with present data as:  
+`r idxs`  
+These indices are then used from the training data to build the classifier.
+```{r}
+fullVardtrain <- dtrain[,idxs]
+dimfVtrain <- dim(fullVardtrain)
+dfV <- dim(fullVardtrain[complete.cases(fullVardtrain),])
+
+idxstrain <- which(nas.vars == 0)
+matchingFD <- which(idxs %in% idxstrain)
+```
+From the test data and the train data we find the following:  
+The variable indices that are full for both are:  `r matchingFD` and are subset of full variable sets in training data set and in testing data set.   
+The dimension of the trainging data after matching the variables to those present in the test data is `r dimfVtrain` of which `r dfV` are complete
+
+from the above analysis we have three different ways to use the training data set. omitting NAs might introduce bias in the classifier and keeping all classifiers will increase variance.  
+This study will then build two data sets with two different sets of variables and compare the results for each:  
+  
+* Classifier1 will use the data set will full observations and variables from the training set.  
+* Classifier2 will use the subset from the training variable set that matches those variables present in the test set that don't have NAs.
+
+# Machine Learning Algorithm
+
+We will use generalized linear model and decision trees and boosting to build three different models using the three data sets.  
+We will also use 10 fold cross validation to predict the output of each algorithm.
+
+First we need to load the caret package into r. We also need to specify the params of the train control to use cross validation. This will be used for all three algorithms.
+```{r}
+library("caret")
+tc <- trainControl("cv",10)
+```
+
+
+## Using generalized boosting model
+```{r}
+gbmd1 <- train(x = fulldtrain[,-160], y = fulldtrain$classe, 
+                method = "gbm",verbose=FALSE ,trControl = tc)
+gbmd2 <- train(x = fullVardtrain[,-60], y = fullVardtrain$classe, 
+                method = "gbm",verbose=FALSE ,trControl = tc)
+gbmd1$finalModel
+gbmd2$finalModel
+```
+
+## Using partition tree
+The following code uses partition tree algorithm and 10 fold cross validation as control. We then reapply for the data set using the variable subset of 60 variables only for comparison and study.
+```{r}
+library("rattle")
+rpartmd1 <- train(x = fulldtrain[,-160], y = fulldtrain$classe, 
+                method = "rpart", trControl = tc)
+fancyRpartPlot(rpartmd1)
+rpartmd2 <- train(x=fullVardtrain[,-60],y=fullVardtrain$classe,
+               method="rpart", trControl=tc)
+fancyRpartPlot(rpartmd2)
+rpartmd1
+rpartmd2
+```
