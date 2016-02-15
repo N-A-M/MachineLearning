@@ -5,7 +5,7 @@ date: "Sunday, February 14, 2016"
 output: 
     html_document:
         pandoc_args: [
-        "+RTS", "-K3g",
+        "+RTS", "-K128M",
         "-RTS"
         ]
 ---
@@ -18,6 +18,7 @@ Data used in this project comes from  http://groupware.les.inf.puc-rio.br/har
 The initial step is to load the training data then display the dimensions as well as the number of NA values as follows:
 
 ```{r}
+knitr::opts_chunk$set(cache=TRUE)
 library("Hmisc")
 dtrain <- csv.get("pml-training.csv")
 dm <- dim(dtrain)
@@ -71,6 +72,7 @@ From this we mark the variable indexes with present data as:
 `r idxs`  
 These indices are then used from the training data to build the classifier.
 ```{r}
+fullVardtest <- dtest[,idxs]
 fullVardtrain <- dtrain[,idxs]
 dimfVtrain <- dim(fullVardtrain)
 dfV <- dim(fullVardtrain[complete.cases(fullVardtrain),])
@@ -91,35 +93,59 @@ This study will then build two data sets with two different sets of variables an
 # Machine Learning Algorithm
 
 We will use generalized linear model and decision trees and boosting to build three different models using the three data sets.  
-We will also use 10 fold cross validation to predict the output of each algorithm.
+We will also use 3 fold cross validation to predict the output of each algorithm.
 
 First we need to load the caret package into r. We also need to specify the params of the train control to use cross validation. This will be used for all three algorithms.
 ```{r}
 library("caret")
-tc <- trainControl("cv",10)
-```
-
-
-## Using generalized boosting model
-```{r}
-gbmd1 <- train(x = fulldtrain[,-160], y = fulldtrain$classe, 
-                method = "gbm",verbose=FALSE ,trControl = tc)
-gbmd2 <- train(x = fullVardtrain[,-60], y = fullVardtrain$classe, 
-                method = "gbm",verbose=FALSE ,trControl = tc)
-gbmd1$finalModel
-gbmd2$finalModel
+tc <- trainControl("cv",number=5)
 ```
 
 ## Using partition tree
-The following code uses partition tree algorithm and 10 fold cross validation as control. We then reapply for the data set using the variable subset of 60 variables only for comparison and study.
+The following code uses partition tree algorithm and 5 fold cross validation as control. We then reapply for the data set using the variable subset of 60 variables only for comparison and study.
 ```{r}
 library("rattle")
-rpartmd1 <- train(x = fulldtrain[,-160], y = fulldtrain$classe, 
-                method = "rpart", trControl = tc)
-fancyRpartPlot(rpartmd1)
+#rpartmd1 <- train(x = fulldtrain[,-160], y = fulldtrain$classe, 
+#                method = "rpart", trControl = tc)
+#fancyRpartPlot(rpartmd1)
 rpartmd2 <- train(x=fullVardtrain[,-60],y=fullVardtrain$classe,
                method="rpart", trControl=tc)
-fancyRpartPlot(rpartmd2)
-rpartmd1
+fancyRpartPlot(rpartmd2$finalModel)
+#rpartmd1
 rpartmd2
+```
+
+## Using generalized boosting model
+
+The following code uses generalized boosting model algorithm and 5 fold cross validation as control. We then reapply for the data set using the variable subset of 60 variables only for comparison and study.
+
+```{r}
+library("gbm")
+#gbmd1 <- train(x = fulldtrain[,-160], y = fulldtrain$classe, 
+#                method = "gbm",verbose=FALSE ,trControl = tc)
+gbmd2 <- gbm( classe ~ ., data = fullVardtrain
+            ,verbose=FALSE 
+            ,n.trees=200)
+#plot.gbm(gbmd1)
+plot.gbm(gbmd2)
+#gbmd1$finalModel
+gbmd2$finalModel
+```
+
+# Prediction for the test data
+The following code uses the generated models on the test data.
+## gbm model 
+```{r}
+#gbmpredict1 <- predict(gbmd1,newdata=dtest)
+gbmpredict2 <- predict(gbmd2,newdata=fullVardtest,n.trees=200
+                        ,type="response")
+#gbmpredict1
+gbmpredict2
+```
+### rpart model
+```{r}
+#rpartpredict1 <- predict(rpartmd1,newdata=dtest)
+rpartpredict2 <- predict(rpartmd2,newdata=fullVardtest)
+#rpartpredict1
+rpartpredict2
 ```
