@@ -5,7 +5,6 @@ Formula
 ggplot2
 Hmisc
 caret
-gbm
-plyr
 rattle
 rpart
+gbm

@@ -20,7 +20,8 @@ The initial step is to load the training data then display the dimensions as wel
 ```{r}
 knitr::opts_chunk$set(cache=TRUE)
 library("Hmisc")
-dtrain <- csv.get("pml-training.csv")
+dtrain <- csv.get("pml-training.csv",na.strings=c(""," ","NA"))
+dtrain <- dtrain[,-1]
 dm <- dim(dtrain)
 nas <- sum(is.na(dtrain))
 ```
@@ -51,7 +52,8 @@ In order to decide on wether we should use the full data set with all variables 
 In this step we start by looking at the givin test data as follows:
 
 ```{r}
-dtest <- csv.get("pml-testing.csv")
+dtest <- csv.get("pml-testing.csv",na.strings=c(""," ","NA"))
+dtest <- dtest[,-1]
 tdm <- dim(dtest)
 tnas <- sum(is.na(dtest))
 tnas.vars <- sapply (dtest,function(x) sum(is.na(x)) )
@@ -93,41 +95,47 @@ This study will then build two data sets with two different sets of variables an
 # Machine Learning Algorithm
 
 We will use generalized linear model and decision trees and boosting to build three different models using the three data sets.  
-We will also use 3 fold cross validation to predict the output of each algorithm.
+We will also use repeated cross validation to predict the output .
 
-First we need to load the caret package into r. We also need to specify the params of the train control to use cross validation. This will be used for all three algorithms.
+First we need to load the caret package into r. We also need to specify the params of the train control to use cross validation. 
+
 ```{r}
 library("caret")
-tc <- trainControl("cv",number=5)
+tc <- trainControl("repeatedcv",repeats=3)
 ```
 
 ## Using partition tree
-The following code uses partition tree algorithm and 5 fold cross validation as control. We then reapply for the data set using the variable subset of 60 variables only for comparison and study.
+The following code uses partition tree algorithm and 10 fold cross validation as control. We then reapply for the data set using the variable subset of 60 variables only for comparison and study.
 ```{r}
 library("rattle")
 #rpartmd1 <- train(x = fulldtrain[,-160], y = fulldtrain$classe, 
 #                method = "rpart", trControl = tc)
 #fancyRpartPlot(rpartmd1)
-rpartmd2 <- train(x=fullVardtrain[,-60],y=fullVardtrain$classe,
-               method="rpart", trControl=tc)
+
+rpartmd2 <- train(classe ~ . ,data=fullVardtrain 
+               ,method="rpart", trControl=tc
+               ,tuneLength=30)
 fancyRpartPlot(rpartmd2$finalModel)
 #rpartmd1
-rpartmd2
+rpartmd2$finalModel
 ```
 
 ## Using generalized boosting model
 
-The following code uses generalized boosting model algorithm and 5 fold cross validation as control. We then reapply for the data set using the variable subset of 60 variables only for comparison and study.
+The following code uses generalized boosting model algorithm and 10 fold cross validation as control. We then reapply for the data set using the variable subset of 60 variables only for comparison and study.
 
 ```{r}
 library("gbm")
 #gbmd1 <- train(x = fulldtrain[,-160], y = fulldtrain$classe, 
 #                method = "gbm",verbose=FALSE ,trControl = tc)
+
 gbmd2 <- gbm( classe ~ ., data = fullVardtrain
             ,verbose=FALSE 
-            ,n.trees=200)
+            ,n.trees=200
+            ,cv.folds=10
+            ,distribution="multinomial")
 #plot.gbm(gbmd1)
-plot.gbm(gbmd2)
+
 #gbmd1$finalModel
 gbmd2$finalModel
 ```
@@ -145,7 +153,8 @@ gbmpredict2
 ### rpart model
 ```{r}
 #rpartpredict1 <- predict(rpartmd1,newdata=dtest)
-rpartpredict2 <- predict(rpartmd2,newdata=fullVardtest)
+rpartpredict2 <- predict(rpartmd2,newdata=fullVardtest
+                         ,type="prob")
 #rpartpredict1
 rpartpredict2
 ```
